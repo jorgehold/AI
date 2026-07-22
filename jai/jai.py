@@ -7,8 +7,13 @@ MODELO = "llama3.2:3b"
 OLLAMA_URL = "http://localhost:11434/api/generate"
 MEMORIA_DIR = Path.home() / "AI" / "jai" / "memoria"
 MEMORIA_DIR.mkdir(parents=True, exist_ok=True)
-PERSONALIDAD = "Eres JAI, asistente personal de Jorge. Respondes en espanol, directo y util. Tienes memoria de conversaciones anteriores."
 historial = []
+
+AGENTES = {
+    "coder": "Eres JAI en modo programador experto. Solo hablas de codigo, debug, arquitectura y buenas practicas. Eres directo, preciso y das ejemplos en codigo. Respondes en espanol.",
+    "trader": "Eres JAI en modo trader experto. Analizas mercados, patrones, estrategias y gestion de riesgo. Respondes en espanol.",
+    "writer": "Eres JAI en modo escritor experto. Ayudas con redaccion, estructura y estilo. Respondes en espanol.",
+}
 
 def archivo_hoy():
     return MEMORIA_DIR / f"{datetime.now().strftime('%Y-%m-%d')}.json"
@@ -30,32 +35,37 @@ def cargar_memoria():
 def guardar_memoria(h):
     with open(archivo_hoy(), "w") as f: json.dump(h, f, ensure_ascii=False, indent=2)
 
-def preguntar(texto, resumen=""):
+def llamar_modelo(prompt):
+    payload = json.dumps({"model":MODELO,"prompt":prompt,"stream":False}).encode("utf-8")
+    try:
+        req = urllib.request.Request(OLLAMA_URL,data=payload,headers={"Content-Type":"application/json"})
+        with urllib.request.urlopen(req,timeout=60) as r: data=json.loads(r.read())
+        return data.get("response","").strip()
+    except urllib.error.URLError: return "Error: Ollama no esta corriendo. Ejecuta: ollama serve"
+    except Exception as e: return f"Error: {e}"
+
+def preguntar(texto, resumen="", personalidad=None):
+    if personalidad is None:
+        personalidad = "Eres JAI, asistente personal de Jorge. Respondes en espanol, directo y util. Tienes memoria de conversaciones anteriores."
     historial.append({"role":"user","content":texto})
     guardar_memoria(historial)
-    p = PERSONALIDAD
+    p = personalidad
     if resumen: p += f"\n[Contexto anterior:]\n{resumen}\n"
     p += "\n[Conversacion actual:]\n"
     for m in historial: p += f"{'Jorge' if m['role']=='user' else 'JAI'}: {m['content']}\n"
     p += "JAI:"
-    payload = json.dumps({"model":MODELO,"prompt":p,"stream":False}).encode("utf-8")
-    try:
-        req = urllib.request.Request(OLLAMA_URL,data=payload,headers={"Content-Type":"application/json"})
-        with urllib.request.urlopen(req,timeout=60) as r: data=json.loads(r.read())
-        resp = data.get("response","").strip()
-        historial.append({"role":"assistant","content":resp})
-        guardar_memoria(historial)
-        return resp
-    except urllib.error.URLError: return "Error: Ollama no esta corriendo. Ejecuta: ollama serve"
-    except Exception as e: return f"Error: {e}"
+    resp = llamar_modelo(p)
+    historial.append({"role":"assistant","content":resp})
+    guardar_memoria(historial)
+    return resp
 
 def hablar(t): subprocess.run(["say","-v","Monica",t],check=False)
 
-def modo_chat():
+def modo_chat(personalidad=None):
     global historial
     historial, resumen = cargar_memoria()
     n = len([m for m in historial if m["role"]=="user"])
-    print(f"\nJAI - Chat (escribe \'salir\' para terminar)")
+    print(f"\nJAI - Chat (escribe salir para terminar)")
     if n: print(f"Recuerdo {n} mensajes de hoy")
     print("-"*50+"\n")
     while True:
@@ -64,15 +74,15 @@ def modo_chat():
             if not e: continue
             if e.lower() in ["salir","exit","quit","bye"]: print("JAI: Hasta luego!"); break
             print("\nPensando...",end="",flush=True)
-            r = preguntar(e, resumen)
+            r = preguntar(e, resumen, personalidad)
             print(f"\rJAI: {r}\n")
         except KeyboardInterrupt: print("\nJAI: Hasta luego!"); break
 
-def modo_texto(pregunta):
+def modo_texto(pregunta, personalidad=None):
     global historial
     historial, resumen = cargar_memoria()
     print("\nPensando...\n")
-    print(f"JAI: {preguntar(pregunta, resumen)}\n")
+    print(f"JAI: {preguntar(pregunta, resumen, personalidad)}\n")
 
 def modo_sync():
     fecha = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -88,7 +98,7 @@ def modo_doctor():
     print("\nJAI Doctor - Diagnostico\n"+"-"*40)
     r = subprocess.run(["ollama","list"],capture_output=True,text=True)
     print("OK Ollama: funcionando" if r.returncode==0 else "ERROR Ollama: no corre")
-    if r.returncode==0: print("OK Modelo llama3.2:3b: instalado" if "llama3.2:3b" in r.stdout else "WARN Modelo no encontrado - ejecuta: ollama pull llama3.2:3b")
+    if r.returncode==0: print("OK Modelo llama3.2:3b: instalado" if "llama3.2:3b" in r.stdout else "WARN Modelo no encontrado")
     archivos = list(MEMORIA_DIR.glob("*.json"))
     print(f"OK Memoria: {len(archivos)} dias guardados")
     r2 = subprocess.run(["git","-C",str(Path.home()/"AI"),"status"],capture_output=True,text=True)
@@ -106,12 +116,16 @@ def modo_memoria():
 def main():
     global historial
     args = sys.argv[1:]
-    if not args: print("Uso: jai [chat|doctor|sync|ask \"pregunta\"|--memoria]"); return
+    if not args: print("Uso: jai [chat|doctor|sync|coder|trader|writer|ask \"pregunta\"|--memoria]"); return
     if args[0] == "sync": modo_sync(); return
     if args[0] == "doctor": modo_doctor(); return
+    if args[0] == "--memoria": modo_memoria(); return
     if args[0] == "ask" and len(args)>1: modo_texto(" ".join(args[1:])); return
-    if "--memoria" in args: modo_memoria(); return
-    if "--chat" in args or args[0] == "chat": modo_chat(); return
+    if args[0] in AGENTES:
+        print(f"\nJAI {args[0].upper()} activado\n")
+        modo_chat(personalidad=AGENTES[args[0]])
+        return
+    if args[0] in ["chat","--chat"]: modo_chat(); return
     modo_texto(" ".join(args))
 
 if __name__ == "__main__": main()
