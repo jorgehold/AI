@@ -133,7 +133,7 @@ def modo_gold():
 def main():
     global historial
     args = sys.argv[1:]
-    if not args: print("Uso: jai [chat|doctor|sync|coder|trader|writer|ask \"pregunta\"|--memoria]"); return
+    if not args: print("\n[33mJAI - Comandos disponibles:[0m\n  chat, ask \"pregunta\", gold\n  coder, trader, finance, research, writer\n  doctor, sync, --memoria\n"); return
     if args[0] == "gold": modo_gold(); return
     if args[0] == "xauusd": modo_gold(); return
     if args[0] == "sync": modo_sync(); return
