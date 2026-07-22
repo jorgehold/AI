@@ -116,10 +116,26 @@ def modo_memoria():
         with open(a) as f: m=json.load(f)
         print(f"{a.stem}: {len([x for x in m if x['role']=='user'])} mensajes")
 
+
+def modo_gold():
+    try:
+        import yfinance as yf, warnings
+        warnings.filterwarnings("ignore")
+        datos = yf.Ticker("GC=F").history(period="1d", interval="1m")
+        if datos.empty:
+            print("Sin datos - mercado cerrado")
+            return
+        ultimo = datos.iloc[-1]
+        print(f"\n[33mXAU/USD: ${ultimo['Close']:.2f} por onza | {str(datos.index[-1])[:19]}[0m\n")
+    except Exception as e:
+        print(f"Error: {e}")
+
 def main():
     global historial
     args = sys.argv[1:]
     if not args: print("Uso: jai [chat|doctor|sync|coder|trader|writer|ask \"pregunta\"|--memoria]"); return
+    if args[0] == "gold": modo_gold(); return
+    if args[0] == "xauusd": modo_gold(); return
     if args[0] == "sync": modo_sync(); return
     if args[0] == "doctor": modo_doctor(); return
     if args[0] == "--memoria": modo_memoria(); return
