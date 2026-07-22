@@ -70,19 +70,19 @@ def modo_chat(personalidad=None):
     print("-"*50+"\n")
     while True:
         try:
-            e = input("Tu: ").strip()
+            e = input("[31mTu: [0m").strip()
             if not e: continue
             if e.lower() in ["salir","exit","quit","bye"]: print("JAI: Hasta luego!"); break
             print("\nPensando...",end="",flush=True)
             r = preguntar(e, resumen, personalidad)
-            print(f"\rJAI: {r}\n")
+            print(f"\r[33mJAI: {r}[0m\n")
         except KeyboardInterrupt: print("\nJAI: Hasta luego!"); break
 
 def modo_texto(pregunta, personalidad=None):
     global historial
     historial, resumen = cargar_memoria()
     print("\nPensando...\n")
-    print(f"JAI: {preguntar(pregunta, resumen, personalidad)}\n")
+    print(f"[33mJAI: {preguntar(pregunta, resumen, personalidad)}[0m\n")
 
 def modo_sync():
     fecha = datetime.now().strftime("%Y-%m-%d %H:%M")
