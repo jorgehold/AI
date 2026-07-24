@@ -42,7 +42,7 @@ def llamar_modelo(prompt):
     payload = json.dumps({"model":MODELO,"prompt":prompt,"stream":False}).encode("utf-8")
     try:
         req = urllib.request.Request(OLLAMA_URL,data=payload,headers={"Content-Type":"application/json"})
-        with urllib.request.urlopen(req,timeout=60) as r: data=json.loads(r.read())
+        with urllib.request.urlopen(req,timeout=120) as r: data=json.loads(r.read())
         return data.get("response","").strip()
     except urllib.error.URLError: return "Error: Ollama no esta corriendo. Ejecuta: ollama serve"
     except Exception as e: return f"Error: {e}"
@@ -150,7 +150,7 @@ def modo_voz():
             print("\nPensando...", end="", flush=True)
             r = preguntar(texto, resumen)
             print(f"\r[33mJAI: {r}[0m\n")
-            hablar(r)
+            hablar(r[:300])
         except KeyboardInterrupt:
             print("\nJAI: Hasta luego!")
             break
