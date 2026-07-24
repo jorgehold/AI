@@ -130,12 +130,60 @@ def modo_gold():
     except Exception as e:
         print(f"Error: {e}")
 
+
+def modo_voz():
+    import tempfile, warnings
+    warnings.filterwarnings("ignore")
+    global historial
+    historial, resumen = cargar_memoria()
+    print("\n[33mJAI VOZ activado (Ctrl+C para salir)[0m\n")
+    hablar("Hola Jorge, estoy escuchando.")
+    while True:
+        try:
+            texto = escuchar()
+            if not texto:
+                continue
+            if any(p in texto.lower() for p in ["adios","hasta luego","salir","bye","chao"]):
+                hablar("Hasta luego Jorge!")
+                break
+            print(f"\n[31mTu:[0m {texto}")
+            print("\nPensando...", end="", flush=True)
+            r = preguntar(texto, resumen)
+            print(f"\r[33mJAI: {r}[0m\n")
+            hablar(r)
+        except KeyboardInterrupt:
+            print("\nJAI: Hasta luego!")
+            break
+
+def escuchar():
+    import subprocess, tempfile, os, warnings
+    warnings.filterwarnings("ignore")
+    print("\n[31m🎤 Escuchando... (5 segundos)[0m", end="", flush=True)
+    audio = tempfile.mktemp(suffix=".wav")
+    try:
+        subprocess.run(["rec","-r","16000","-c","1",audio,"trim","0","5"],
+            check=True, capture_output=True)
+    except Exception as e:
+        print(f"\nError grabando: {e}")
+        return None
+    try:
+        import whisper
+        model = whisper.load_model("tiny")
+        result = model.transcribe(audio, language="es")
+        os.unlink(audio)
+        texto = result["text"].strip()
+        return texto if texto else None
+    except Exception as e:
+        print(f"\nError transcribiendo: {e}")
+        return None
+
 def main():
     global historial
     args = sys.argv[1:]
     if not args: print("\n[33mJAI - Comandos disponibles:[0m\n  chat, ask \"pregunta\", gold\n  coder, trader, finance, research, writer\n  doctor, sync, --memoria\n"); return
     if args[0] == "gold": modo_gold(); return
     if args[0] == "xauusd": modo_gold(); return
+    if "--voz" in args or args[0] == "voz": modo_voz(); return
     if args[0] == "sync": modo_sync(); return
     if args[0] == "doctor": modo_doctor(); return
     if args[0] == "--memoria": modo_memoria(); return
