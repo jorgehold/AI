@@ -158,7 +158,18 @@ def modo_voz():
 def escuchar():
     import subprocess, tempfile, os, warnings
     warnings.filterwarnings("ignore")
-    print("\n[31m🎤 Escuchando... (5 segundos)[0m", end="", flush=True)
+    import threading, time
+    stop_bar = [False]
+    def barra():
+        chars = ["▰▱▱▱▱▱▱▱▱▱","▰▰▱▱▱▱▱▱▱▱","▰▰▰▱▱▱▱▱▱▱","▰▰▰▰▱▱▱▱▱▱","▰▰▰▰▰▱▱▱▱▱","▰▰▰▰▰▰▱▱▱▱","▰▰▰▰▰▰▰▱▱▱","▰▰▰▰▰▰▰▰▱▱","▰▰▰▰▰▰▰▰▰▱","▰▰▰▰▰▰▰▰▰▰"]
+        i = 0
+        while not stop_bar[0]:
+            print(f"\r[31m🎤 {chars[i % len(chars)]} Escuchando...[0m", end="", flush=True)
+            i += 1
+            time.sleep(0.5)
+        print(f"\r[31m🎤 ▰▰▰▰▰▰▰▰▰▰ Procesando...[0m", end="", flush=True)
+    t = threading.Thread(target=barra, daemon=True)
+    t.start()
     audio = tempfile.mktemp(suffix=".wav")
     try:
         subprocess.run(["rec","-r","16000","-c","1",audio,"trim","0","5"],
@@ -170,10 +181,13 @@ def escuchar():
         import whisper
         model = whisper.load_model("tiny")
         result = model.transcribe(audio, language="es")
+        stop_bar[0] = True
+        time.sleep(0.1)
         os.unlink(audio)
         texto = result["text"].strip()
         return texto if texto else None
     except Exception as e:
+        stop_bar[0] = True
         print(f"\nError transcribiendo: {e}")
         return None
 
