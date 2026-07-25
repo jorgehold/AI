@@ -1,45 +1,52 @@
-from flask import Flask, jsonify, render_template
+from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
-import yfinance as yf
-import warnings
-warnings.filterwarnings("ignore")
+import subprocess, json, urllib.request, sys, os, tempfile
+import warnings; warnings.filterwarnings("ignore")
 
-app = Flask(__name__, template_folder='templates')
-CORS(app)
+app = Flask(__name__)
+CORS(app, origins="*", methods=["GET","POST","OPTIONS"], allow_headers=["Content-Type"])
+
+OLLAMA_URL = "http://localhost:11434/api/generate"
+MODELO = "llama3.2:3b"
+JAI_PY = os.path.expanduser("~/AI/jai/jai.py")
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return send_file(os.path.expanduser('~/AI/jai/chat.html'))
 
-@app.route('/quote')
-def quote():
-    hist = yf.Ticker("GC=F").history(period="2d", interval="1m")
-    if hist.empty:
-        return jsonify({"error": "sin datos"})
-    price = round(float(hist['Close'].iloc[-1]), 2)
-    prev = round(float(hist['Close'].iloc[0]), 2)
-    spread = 0.40
-    return jsonify({
-        "price": price, "bid": round(price-spread/2,2), "ask": round(price+spread/2,2),
-        "open": round(float(hist['Open'].iloc[0]),2), "prev": prev,
-        "high": round(float(hist['High'].max()),2), "low": round(float(hist['Low'].min()),2),
-        "vol": int(hist['Volume'].sum()), "spread": spread,
-        "change": round(price-prev,2), "changePct": round((price-prev)/prev*100,3)
-    })
+@app.route('/chat', methods=['POST'])
+def chat():
+    msg = request.json.get('message','')
+    prompt = f"Eres JAI, asistente personal de Jorge. Respondes en espanol, directo y util. Maximo 3 oraciones cortas.\n\nJorge: {msg}\nJAI:"
+    payload = json.dumps({"model":MODELO,"prompt":prompt,"stream":False}).encode()
+    try:
+        req = urllib.request.Request(OLLAMA_URL,data=payload,headers={"Content-Type":"application/json"})
+        with urllib.request.urlopen(req,timeout=120) as r:
+            data = json.loads(r.read())
+            return jsonify({"reply": data.get("response","").strip()})
+    except Exception as e:
+        return jsonify({"reply": f"Error: {e}"})
 
-@app.route('/candles/<tf>')
-def candles(tf):
-    periods = {"m1":"1d","m5":"5d","m15":"5d","m30":"60d","h1":"60d","h4":"60d","d1":"1y"}
-    intervals = {"m1":"1m","m5":"5m","m15":"15m","m30":"30m","h1":"1h","h4":"1h","d1":"1d"}
-    hist = yf.Ticker("GC=F").history(period=periods.get(tf,"5d"), interval=intervals.get(tf,"15m"))
-    if hist.empty:
-        return jsonify([])
-    return jsonify([{
-        "time": int(ts.timestamp()), "open": round(float(r['Open']),2),
-        "high": round(float(r['High']),2), "low": round(float(r['Low']),2),
-        "close": round(float(r['Close']),2), "value": int(r['Volume'])
-    } for ts, r in hist.iterrows()])
+@app.route('/speak', methods=['POST'])
+def speak():
+    text = request.json.get('text','')
+    subprocess.Popen(["say","-v","Monica",text[:300]])
+    return jsonify({"ok":True})
+
+@app.route('/listen', methods=['POST'])
+def listen():
+    audio = tempfile.mktemp(suffix=".wav")
+    try:
+        subprocess.run(["rec","-r","16000","-c","1",audio,"trim","0","5"],
+            check=True,capture_output=True,timeout=10)
+        import whisper
+        model = whisper.load_model("tiny")
+        result = model.transcribe(audio,language="es")
+        os.unlink(audio)
+        return jsonify({"text": result["text"].strip()})
+    except Exception as e:
+        return jsonify({"text":"","error":str(e)})
 
 if __name__ == '__main__':
-    print("Abre: http://localhost:5000")
-    app.run(port=5000, debug=False)
+    print("JAI Chat en: http://127.0.0.1:5001")
+    app.run(host='127.0.0.1',port=5001,debug=False)
